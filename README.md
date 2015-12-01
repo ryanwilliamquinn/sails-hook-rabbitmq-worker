@@ -22,6 +22,7 @@ var path = require('path')
 
 module.exports.rabbitworker = {
   options: {
+    runJobs: true, // flag for whether this particular instance should consume jobs from the queue
     exchangeName: 'some_exchange_name',  // optional, defaults to 'sails_jobs'
     host: 'localhost', // all of these connection settings are optional.  if omitted, these are the defaults.
     port: 5672,
