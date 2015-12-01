@@ -2,7 +2,7 @@ const amqp = require('amqplib')
 
 function getConnectionUrl(options) {
   // create connection string with options:
-  const protocol = options.ssl ? 'amqp' : 'amqps'
+  const protocol = options.ssl ? 'amqps' : 'amqp'
   const host = options.host || 'localhost'
   const port = options.port || 5672
   const username = options.username || 'guest'
