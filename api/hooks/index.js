@@ -1,31 +1,48 @@
 const amqp = require('amqplib')
 
+function getConnectionUrl(options) {
+  // create connection string with options:
+  const protocol = options.ssl ? 'amqp' : 'amqps'
+  const host = options.host || 'localhost'
+  const port = options.port || 5672
+  const username = options.username || 'guest'
+  const password = options.password || 'guest'
+  return `${protocol}://${username}:${password}@${host}:${port}`
+}
+
 module.exports = sails => {
   return {
     identity: 'worker',
     configure() {
-      if (!_.isObject(sails.config.worker)) sails.config.worker = {};
+      if (!_.isObject(sails.config.rabbitworker)) {
+        sails.config.rabbitworker = {
+          options: {}
+        }
+      }
     },
     initialize(next) {
       // load up rabbit mq jobs
-      const jobs = sails.config.jobs
+      const jobs = sails.config.rabbitworker.jobs
+      const options = sails.config.rabbitworker.options
+      const connectionUrl = getConnectionUrl(options)
+      console.log(`the rabbit connection url: ${connectionUrl}`)
 
       // connect to rabbit
-      return amqp.connect('amqp://localhost').then(function(conn) {
+      return amqp.connect(connectionUrl).then(function(conn) {
         process.once('SIGINT', function() {
-          conn.close();
-        });
+          conn.close()
+        })
 
         // set up the channel and the delayed job exchange
         return conn.createChannel().then(function(ch) {
-          const exchangeName = 'delayed_jobs'
+          const exchangeName = options.exchangeName || 'sails_jobs'
 
           return ch.assertExchange(exchangeName, 'direct', {
             durable: false
           }).then(() => {
 
             // create a method that accepts the job name and the message data and publishes it to the appropriate queue
-            sails.sendToQueue = (queueName, payload, options) => {
+            sails.createJob = (queueName, payload, options) => {
               ch.publish(exchangeName, queueName, new Buffer(payload), options)
             }
 
@@ -38,7 +55,7 @@ module.exports = sails => {
 
               var ok = ch.assertQueue(jobData.name, {
                 durable: durable
-              });
+              })
 
               ok = ok.then(() => {
                 return ch.bindQueue(jobData.name, exchangeName, jobData.name)
@@ -47,8 +64,8 @@ module.exports = sails => {
               ok = ok.then(() => {
                 // default to prefetch = 1, can be overridden in job definition
                 const prefetchCount = jobData.prefetchCount === undefined ? 1 : jobData.prefetchCount
-                ch.prefetch(prefetchCount);
-              });
+                ch.prefetch(prefetchCount)
+              })
               ok = ok.then(() => {
                 const ackWorker = message => {
                   jobData.worker(message).then(() => {
@@ -57,9 +74,9 @@ module.exports = sails => {
                 }
                 ch.consume(jobData.name, ackWorker, {
                   noAck: false
-                });
-              });
-              return ok;
+                })
+              })
+              return ok
             }))
           })
         })
