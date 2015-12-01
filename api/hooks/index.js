@@ -21,11 +21,10 @@ module.exports = sails => {
       }
     },
     initialize(next) {
-      // load up rabbit mq jobs
-      const jobs = sails.config.rabbitworker.jobs
       const options = sails.config.rabbitworker.options
+
+      const jobs = sails.config.rabbitworker.jobs
       const connectionUrl = getConnectionUrl(options)
-      console.log(`the rabbit connection url: ${connectionUrl}`)
 
       // connect to rabbit
       return amqp.connect(connectionUrl).then(function(conn) {
@@ -45,6 +44,9 @@ module.exports = sails => {
             sails.createJob = (queueName, payload, options) => {
               ch.publish(exchangeName, queueName, new Buffer(payload), options)
             }
+
+            // only worry about registering workers on sails instances that are running jobs
+            if (!options.runJobs) return
 
             // configure the workers defined in the parent project's api/jobs to consume the appropriate queues
             return Promise.all(Object.keys(jobs).map(jobName => {
