@@ -1,5 +1,8 @@
 # sails-hook-rabbitmq-worker
+
 sails hook for easy rabbitmq worker integration
+
+### This is still in alpha, I wouldn't use it for anything important
 
 
 Jobs are defined in api/jobs.  They should look like this:
