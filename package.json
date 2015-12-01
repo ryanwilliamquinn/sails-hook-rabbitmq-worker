@@ -1,0 +1,18 @@
+{
+  "name": "sails-hook-rabbitmq-worker",
+  "version": "0.0.1",
+  "description": "hook for easy configuration of rabbitmq workers",
+  "main": "api/hooks/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^0.4.0",
+    "require-all": "^2.0.0"
+  },
+  "sails": {
+    "isHook": true
+  }
+}
