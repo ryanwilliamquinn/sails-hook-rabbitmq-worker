@@ -1,0 +1,7 @@
+machine:
+  node:
+    version: 4.2.2
+
+dependencies:
+  pre:
+    - npm install -fg npm@2.14.7
