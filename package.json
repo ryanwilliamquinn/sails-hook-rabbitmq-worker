@@ -2,9 +2,13 @@
   "name": "sails-hook-rabbitmq-worker",
   "version": "0.0.1",
   "description": "hook for easy configuration of rabbitmq workers",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryanwilliamquinn/sails-hook-rabbitmq-worker.git"
+  },
   "main": "api/hooks/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=test mocha ./test"
   },
   "author": "",
   "license": "ISC",
@@ -14,5 +18,9 @@
   },
   "sails": {
     "isHook": true
+  },
+  "devDependencies": {
+    "mocha": "^2.3.4",
+    "sails": "balderdashy/sails"
   }
 }
