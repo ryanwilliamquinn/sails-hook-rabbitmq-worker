@@ -48,7 +48,11 @@ module.exports = sails => {
             // only worry about registering workers on sails instances that are running jobs
             if (!options.runJobs) return
 
-            return registerWorkers(ch, exchangeName, jobs)
+            return new Promise((resolve, reject) => {
+              sails.after('hook:orm:loaded', function() {
+                registerWorkers(ch, exchangeName, jobs).then(resolve).catch(reject)
+              })
+            })
           })
         })
       }).then(() => next()).catch(next)
@@ -109,4 +113,3 @@ function createWrappedWorker(channel, jobData) {
     })
   }
 }
-
