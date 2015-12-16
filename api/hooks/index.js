@@ -13,6 +13,7 @@ function getConnectionUrl(options) {
   if (options.vhost) {
     url += `/${options.vhost}`
   }
+  return url
 }
 
 module.exports = sails => {
