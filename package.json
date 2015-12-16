@@ -1,6 +1,6 @@
 {
   "name": "sails-hook-rabbitmq-worker",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "hook for easy configuration of rabbitmq workers",
   "repository": {
     "type": "git",
