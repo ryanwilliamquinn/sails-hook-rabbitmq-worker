@@ -1,3 +1,5 @@
+'use strict'
+
 const amqp = require('amqplib')
 
 function getConnectionUrl(options) {
@@ -7,7 +9,10 @@ function getConnectionUrl(options) {
   const port = options.port || 5672
   const username = options.username || 'guest'
   const password = options.password || 'guest'
-  return `${protocol}://${username}:${password}@${host}:${port}`
+  let url = `${protocol}://${username}:${password}@${host}:${port}`
+  if (options.vhost) {
+    url += `/${options.vhost}`
+  }
 }
 
 module.exports = sails => {
