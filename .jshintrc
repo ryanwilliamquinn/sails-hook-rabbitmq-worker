@@ -1,0 +1,11 @@
+{
+  "esnext": true,
+  "asi": true,
+  "globals": {
+    "sails": true,
+    "module": false,
+    "Buffer": false,
+    "require": false,
+    "setTimeout": false
+  }
+}

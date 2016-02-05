@@ -1,6 +1,7 @@
 'use strict'
 
 const amqp = require('amqplib')
+const _ = require('lodash')
 
 function getConnectionUrl(options) {
   // create connection string with options:
@@ -29,41 +30,80 @@ module.exports = sails => {
     initialize(next) {
       const options = sails.config.rabbitworker.options
 
-      const jobs = sails.config.rabbitworker.jobs
-      const connectionUrl = getConnectionUrl(options)
+      // default retry connection attempts to 3
+      if (!_.has(options.retryConnectionAttempts)) {
+        options.retryConnectionAttempts = 3
+      }
 
-      return amqp.connect(connectionUrl).then(function(conn) {
-        sails.rabbitworker = {
-          connection: conn
-        }
+      if (!_.has(options.retryDroppedConnectionAttempts)) {
+        options.retryDroppedConnectionAttempts = 100
+      }
 
-        // set up the channel and the delayed job exchange
-        return conn.createChannel().then(function(ch) {
-          const exchangeName = options.exchangeName || 'sails_jobs'
-          sails.rabbitworker.channel = ch
+      // default retry connection timeout to 10 seconds
+      if (!_.has(options.retryConnectionTimeout)) {
+        options.retryConnectionTimeout = 10000
+      }
+      connect(options)
+        .then(() => next())
+        .catch(next)
+    }
+  }
+}
 
-          // create a durable 'direct' exchange, to pass jobs to queues based on exact name match
-          return ch.assertExchange(exchangeName, 'direct', {
-            durable: true
-          }).then(() => {
-            // create a method that accepts the job name and the message data and publishes it to the appropriate queue
-            sails.createJob = (queueName, payload, options) => {
-              ch.publish(exchangeName, queueName, new Buffer(payload), options)
-            }
+function connect(options) {
+  const jobs = sails.config.rabbitworker.jobs
+  const connectionUrl = getConnectionUrl(options)
 
-            // only worry about registering workers on sails instances that are running jobs
-            if (!options.runJobs) return
+  return amqp.connect(connectionUrl)
+    .then(function(conn) {
+      sails.rabbitworker = {
+        connection: conn
+      }
 
-            return new Promise((resolve, reject) => {
-              sails.after('hook:orm:loaded', function() {
-                registerWorkers(ch, exchangeName, jobs).then(resolve).catch(reject)
-              })
+      // log connection errors, try to reconnect
+      conn.on('error', err => {
+        handleDroppedConnection(err, options)
+      })
+
+      // set up the channel and the delayed job exchange
+      return conn.createChannel().then(function(ch) {
+        const exchangeName = options.exchangeName || 'sails_jobs'
+        sails.rabbitworker.channel = ch
+
+        // log channel level errors
+        ch.on('error', sails.log.error.bind(sails.log))
+
+        // create a durable 'direct' exchange, to pass jobs to queues based on exact name match
+        return ch.assertExchange(exchangeName, 'direct', {
+          durable: true
+        }).then(() => {
+          // create a method that accepts the job name and the message data and publishes it to the appropriate queue
+          sails.createJob = (queueName, payload, options) => {
+            ch.publish(exchangeName, queueName, new Buffer(payload), options)
+          }
+
+          // only worry about registering workers on sails instances that are running jobs
+          if (!options.runJobs) return
+
+          return new Promise((resolve, reject) => {
+            sails.after('hook:orm:loaded', function() {
+              registerWorkers(ch, exchangeName, jobs).then(resolve).catch(reject)
             })
           })
         })
-      }).then(() => next()).catch(next)
-    }
-  }
+      })
+    })
+    .catch(err => {
+      if (err.code === 'ECONNREFUSED') {
+        return handleConnectionError(err, options)
+          .then(() => {
+            sails.log.info('Reconnected to rabbitmq')
+          })
+      } else {
+        throw err
+      }
+    })
+
 }
 
 
@@ -117,5 +157,28 @@ function createWrappedWorker(channel, jobData) {
         channel.nack(message, false, true)
       }
     })
+  }
+}
+
+function handleDroppedConnection(err, options) {
+  sails.log.error('Connection to rabbitmq dropped')
+  options.retryConnectionAttempts = options.retryDroppedConnectionAttempts
+  handleConnectionError(err, options)
+}
+
+function handleConnectionError(err, options) {
+  const retryAttempts = options.retryConnectionAttempts
+  sails.log.error('Problem connecting to rabbitmq server', err)
+  if (retryAttempts > 0) {
+    sails.log.info('Attempting to reconnect to rabbitmq server, retry attempts remaining: ', retryAttempts)
+    options.retryConnectionAttempts = retryAttempts - 1
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve(connect(options))
+      }, options.retryConnectionTimeout)
+    })
+  } else {
+    sails.log.info('Unable to connect to rabbitmq server')
+    throw err
   }
 }

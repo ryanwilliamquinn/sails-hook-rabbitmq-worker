@@ -1,6 +1,6 @@
 {
   "name": "sails-hook-rabbitmq-worker",
-  "version": "0.0.3",
+  "version": "0.0.2",
   "description": "hook for easy configuration of rabbitmq workers",
   "repository": {
     "type": "git",
@@ -14,6 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "amqplib": "^0.4.0",
+    "lodash": "^4.2.1",
     "require-all": "^2.0.0"
   },
   "sails": {
