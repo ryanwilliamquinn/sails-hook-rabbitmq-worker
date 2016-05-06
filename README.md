@@ -2,8 +2,7 @@
 
 sails hook for easy rabbitmq worker integration
 
-### This is still in alpha, I wouldn't use it for anything important
-
+### This is in beta, still working out connection error handling
 
 Jobs are defined in api/jobs.  They should look like this:
 ```
@@ -27,6 +26,7 @@ module.exports.rabbitworker = {
   options: {
     runJobs: true, // flag for whether this particular instance should consume jobs from the queue
     exchangeName: 'some_exchange_name',  // optional, defaults to 'sails_jobs'
+    heartbeat: 5, // optional number of seconds, defaults to no heartbeat
     host: 'localhost', // all of these connection settings are optional.  if omitted, these are the defaults.
     port: 5672,
     username: 'guest',

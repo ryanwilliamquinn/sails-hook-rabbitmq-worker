@@ -10,10 +10,19 @@ function getConnectionUrl(options) {
   const port = options.port || 5672
   const username = options.username || 'guest'
   const password = options.password || 'guest'
+  const heartbeat = options.heartbeat
   let url = `${protocol}://${username}:${password}@${host}:${port}`
+
   if (options.vhost) {
     url += `/${options.vhost}`
   }
+
+  if (heartbeat) {
+    url += `?heartbeat=${heartbeat}`
+  }
+
+  sails.log.verbose(`Rabbitmq connection url: ${url}`)
+
   return url
 }
 
@@ -43,7 +52,11 @@ module.exports = sails => {
       if (!_.has(options.retryConnectionTimeout)) {
         options.retryConnectionTimeout = 10000
       }
+
       connect(options)
+        .catch(err => {
+          return handleDroppedConnection(err, options)
+        })
         .then(() => next())
         .catch(next)
     }
@@ -79,7 +92,10 @@ function connect(options) {
         }).then(() => {
           // create a method that accepts the job name and the message data and publishes it to the appropriate queue
           sails.createJob = (queueName, payload, options) => {
-            ch.publish(exchangeName, queueName, new Buffer(payload), options)
+            options = Object.assign({
+              persistent: true
+            }, options)
+            sails.rabbitworker.channel.publish(exchangeName, queueName, new Buffer(payload), options)
           }
 
           // only worry about registering workers on sails instances that are running jobs
@@ -92,16 +108,6 @@ function connect(options) {
           })
         })
       })
-    })
-    .catch(err => {
-      if (err.code === 'ECONNREFUSED') {
-        return handleConnectionError(err, options)
-          .then(() => {
-            sails.log.info('Reconnected to rabbitmq')
-          })
-      } else {
-        throw err
-      }
     })
 
 }
@@ -120,7 +126,7 @@ function registerWorkers(channel, exchangeName, jobs) {
 
     // create a queue based on job name (if it already exists nothing happens)
     return channel.assertQueue(jobData.name, {
-      durable: durable
+      durable
     }).then(() => {
       // bind the queue to the proper exchange
       return channel.bindQueue(jobData.name, exchangeName, jobData.name)
@@ -146,15 +152,20 @@ function registerWorkers(channel, exchangeName, jobs) {
 function createWrappedWorker(channel, jobData) {
   return function(message) {
     jobData.worker(message).then(() => {
-      channel.ack(message)
+      return sails.rabbitworker.channel.ack(message)
+        .catch(err => {
+          // handle channel errors here
+          sails.log.error('Error attempting to acknowledge job completion: ' + err)
+          // TODO: retry ack?
+        })
     }).catch(err => {
       //TODO do we have to json.parse the message here?
       if (message.fields.redelivered) {
         // nack and don't requeue
-        channel.nack(message, false, false)
+        sails.rabbitworker.channel.nack(message, false, false)
       } else {
         // nack and requeue
-        channel.nack(message, false, true)
+        sails.rabbitworker.channel.nack(message, false, true)
       }
     })
   }
@@ -163,7 +174,10 @@ function createWrappedWorker(channel, jobData) {
 function handleDroppedConnection(err, options) {
   sails.log.error('Connection to rabbitmq dropped')
   options.retryConnectionAttempts = options.retryDroppedConnectionAttempts
-  handleConnectionError(err, options)
+  return handleConnectionError(err, options)
+    .then(() => {
+      sails.log.info('Reconnected to rabbitmq')
+    })
 }
 
 function handleConnectionError(err, options) {
@@ -177,8 +191,11 @@ function handleConnectionError(err, options) {
         resolve(connect(options))
       }, options.retryConnectionTimeout)
     })
+    .catch(() => {
+      return handleConnectionError(err, options)
+    })
   } else {
     sails.log.info('Unable to connect to rabbitmq server')
-    throw err
+    return Promise.reject(err)
   }
 }
