@@ -1,25 +1,19 @@
 const assert = require('assert')
 const queueName = 'testMessagePassing'
 
-after(done => {
-  sails.rabbitworker.channel.purgeQueue(queueName).then(() => {
-    return sails.rabbitworker.connection.close().then(() => {
-      done()
-    })
-  })
-})
 
 function assertEmptyQueue(done) {
   sails.rabbitworker.channel.checkQueue(queueName)
     .then(results => {
-      assert.equal(results.consumerCount, 1)
+      assert(results.consumerCount > 0)
       assert.equal(results.messageCount, 0)
       done()
     })
     .catch(done)
 }
 
-describe('worker exchange tests', () => {
+describe('worker exchange tests', function() {
+
   it('should have a queue with one consumer and be empty', done => {
     assertEmptyQueue(done)
   })
@@ -39,7 +33,7 @@ describe('worker exchange tests', () => {
     setTimeout(() => {
       assert.equal(sails.testMessagePassingCountComplete, 0)
       assertEmptyQueue(done)
-    }, 1000)
+    }, 100)
   })
 
 
