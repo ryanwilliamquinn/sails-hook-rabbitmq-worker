@@ -7,17 +7,24 @@
  * @framework mocha
  */
 
+const queueName = 'testMessagePassing'
+
 before(function(done) {
   require('sails').lift({
     host: 'localhost',
     port: 1440,
+    log: {
+      level: 'silent'
+    },
     hooks: {
       i18n: false,
       grunt: false
     },
     rabbitworker: {
       options: {
-        runJobs: true
+        runJobs: true,
+        retryConnectionTimeout: 500,
+        retryFailedJobs: false
       },
       jobs: {
         testMessagePassing: {
@@ -32,10 +39,19 @@ before(function(done) {
             }
 
             // ensure that rejected messages eventually get removed from the queue
-            return Promise.reject()
+            return Promise.reject(new Error('Bad request'))
           }
         }
       }
     }
   }, done);
 });
+
+after(done => {
+  sails.rabbitworker.channel.purgeQueue(queueName).then(() => {
+    return sails.rabbitworker.connection.close().then(() => {
+      sails.log.info('Purged queues and closed rabbit connection after tests complete')
+      done()
+    })
+  })
+})
